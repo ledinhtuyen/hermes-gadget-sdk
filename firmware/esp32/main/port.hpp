@@ -313,7 +313,9 @@ i2c_master_bus_handle_t bus(const I2cBusConfig& cfg);
 // run at one fixed rate (they share the bit clock).
 class CodecAudio {
  public:
-  static constexpr uint32_t kRate = 16000;
+  // ES8311 and ES7210 share one I2S clock on the AMOLED-1.75 board. Keep the
+  // duplex codec at MAI Voice's native 24 kHz so TTS reaches the DAC directly.
+  static constexpr uint32_t kRate = 24000;
   bool begin(const CodecAudioConfig& cfg, i2c_master_bus_handle_t bus);
   esp_codec_dev_handle_t out() const { return out_; }
   esp_codec_dev_handle_t in() const { return in_; }

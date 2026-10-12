@@ -257,6 +257,8 @@ Board option `esp32s3-touch-amoled-175`, for Waveshare's all-in-one board: an ES
 | I2C bus | | SDA 15, SCL 14, 400 kHz |
 | BOOT key | | GPIO 0 |
 
+**Audio.** The shared ES8311/ES7210 I2S clock runs at 24 kHz so MAI Voice PCM reaches the ES8311 without a second sample-rate conversion. The microphone upload is therefore also PCM16 mono at 24 kHz.
+
 **Controls.** The screen is the main input:
 
 | Do this | Does |
