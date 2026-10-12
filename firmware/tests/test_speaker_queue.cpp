@@ -11,3 +11,9 @@ TEST("whole_sample_bytes: a write that fits is queued whole") {
   CHECK_EQ(hg::whole_sample_bytes(1280, 1281), 1280u);
   CHECK_EQ(hg::whole_sample_bytes(1280, 49151), 1280u);
 }
+
+TEST("speaker waits for a startup buffer before playing a live stream") {
+  CHECK(!hg::speaker_should_start(4096, 6400, true));
+  CHECK(hg::speaker_should_start(6400, 6400, true));
+  CHECK(hg::speaker_should_start(100, 6400, false));  // drain short final replies
+}
