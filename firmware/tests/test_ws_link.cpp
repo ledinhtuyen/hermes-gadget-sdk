@@ -96,6 +96,13 @@ TEST("ws: messages leave the reserved slots free") {
   CHECK(!hg::ws::may_queue_message(0));
 }
 
+TEST("ws: audio queue absorbs short Wi-Fi scheduling stalls") {
+  CHECK_EQ(hg::ws::kTxMessages, size_t(256));
+  CHECK(hg::ws::may_queue_message(hg::ws::kTxMessages + hg::ws::kTxReserved));
+  CHECK(hg::ws::may_queue_message(hg::ws::kTxReserved + 1));
+  CHECK(!hg::ws::may_queue_message(hg::ws::kTxReserved));
+}
+
 TEST("ws: control messages can use priority slots but always leave one for close") {
   CHECK(hg::ws::may_queue_control_message(hg::ws::kTxReserved));
   CHECK(hg::ws::may_queue_control_message(hg::ws::kTxCloseReserved + 1));

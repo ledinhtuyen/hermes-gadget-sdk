@@ -89,19 +89,31 @@ void WsTransport::close() {
 }
 
 bool WsTransport::enqueue(uint8_t opcode, const void* data, size_t len) {
-  if (!client_ || !esp_websocket_client_is_connected(client_)) return false;
+  if (!client_ || !esp_websocket_client_is_connected(client_)) {
+    ESP_LOGW(TAG, "send queue rejected opcode=%u: websocket disconnected", opcode);
+    return false;
+  }
   const size_t free_slots = uxQueueSpacesAvailable(tx_);
   const bool may_queue = opcode == hg::ws::kText
                              ? hg::ws::may_queue_control_message(free_slots)
                              : hg::ws::may_queue_message(free_slots);
-  if (!may_queue) return false;  // audio frames can't starve protocol control
+  if (!may_queue) {
+    ESP_LOGW(TAG, "send queue saturated: opcode=%u free_slots=%u", opcode,
+             static_cast<unsigned>(free_slots));
+    return false;  // audio frames can't starve protocol control
+  }
   auto* copy = static_cast<uint8_t*>(heap_caps_malloc(len ? len : 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
   if (!copy) copy = static_cast<uint8_t*>(malloc(len ? len : 1));
-  if (!copy) return false;
+  if (!copy) {
+    ESP_LOGE(TAG, "send queue allocation failed: opcode=%u bytes=%u", opcode,
+             static_cast<unsigned>(len));
+    return false;
+  }
   if (len) std::memcpy(copy, data, len);
   TxItem item{client_, gens_.current(), opcode, copy, len};
   if (xQueueSend(tx_, &item, 0) != pdTRUE) {
     free(copy);
+    ESP_LOGW(TAG, "send queue raced full: opcode=%u", opcode);
     return false;
   }
   return true;

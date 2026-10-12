@@ -32,7 +32,7 @@ class Generations {
 
 // The send queue holds messages plus a few slots only "close this client" may
 // use, so leaving a connection never waits for a slow link to drain.
-constexpr size_t kTxMessages = 64;
+constexpr size_t kTxMessages = 256;
 constexpr size_t kTxReserved = 4;
 constexpr size_t kTxCloseReserved = 1;
 inline bool may_queue_message(size_t free_slots) { return free_slots > kTxReserved; }
