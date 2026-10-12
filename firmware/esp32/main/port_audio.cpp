@@ -17,7 +17,7 @@ namespace {
 
 const char* TAG = "hg.audio";
 constexpr size_t kMicChunk = 320;           // 20 ms at 16 kHz
-constexpr size_t kSpeakerBuffer = 512 * 1024;  // full-file PCM buffer (~21 s at 24 kHz)
+constexpr size_t kSpeakerBuffer = 2 * 1024 * 1024;  // full-file PCM buffer (~43.7 s at 24 kHz)
 constexpr size_t kSpeakerPrebufferBytes = 48000;  // 1 s at 24 kHz, before starting live playback
 constexpr size_t kSpeakerChunk = 512;       // samples per I2S write
 
