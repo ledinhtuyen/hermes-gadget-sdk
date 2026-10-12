@@ -162,6 +162,12 @@ void I2sSpeaker::task(void* arg) {
     }
     size_t got = xStreamBufferReceive(self->buffer_, chunk, sizeof(chunk), pdMS_TO_TICKS(20));
     if (got == 0) {
+      if (enabled && self->open_.load()) {
+        // An open stream underrun would make the next DMA write audible as a click.
+        // Stop the peripheral and wait for the startup cushion to refill.
+        i2s_channel_disable(self->tx_);
+        enabled = false;
+      }
       if (self->draining_ && !self->open_) {
         self->draining_ = false;  // everything queued has been written out
         if (enabled) {

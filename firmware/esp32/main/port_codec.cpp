@@ -302,8 +302,8 @@ void CodecSpeaker::task(void* arg) {
         xStreamBufferReset(self->buffer_);
       }
     }
-    if (!hg::speaker_should_start(xStreamBufferBytesAvailable(self->buffer_), kSpeakerPrebufferBytes,
-                                  self->open_.load())) {
+    if (!pa && !hg::speaker_should_start(xStreamBufferBytesAvailable(self->buffer_), kSpeakerPrebufferBytes,
+                                         self->open_.load())) {
       vTaskDelay(pdMS_TO_TICKS(5));
       continue;
     }
@@ -311,6 +311,13 @@ void CodecSpeaker::task(void* arg) {
     size_t got = pa ? pa->receive(chunk, sizeof(chunk), generation)
                     : xStreamBufferReceive(self->buffer_, chunk, sizeof(chunk), pdMS_TO_TICKS(20));
     if (got == 0) {
+      if (playing && self->open_.load()) {
+        // Rebuffer an open stream after a Wi-Fi underrun instead of restarting
+        // the codec on the next tiny packet.
+        esp_codec_dev_set_out_mute(self->dev_, true);
+        if (pa) pa->disable();
+        playing = false;
+      }
       if (playing && !self->open_) {
         // Everything queued has been written out: mute so the amplifier stays quiet.
         self->draining_ = false;
