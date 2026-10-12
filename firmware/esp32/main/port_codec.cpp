@@ -19,7 +19,7 @@ namespace {
 
 const char* TAG = "hg.codec";
 constexpr size_t kMicChunk = 480;             // 20 ms at 24 kHz
-constexpr size_t kSpeakerBuffer = 48 * 1024;  // ~1.5 s at 16 kHz; the server paces 0.5 s ahead
+constexpr size_t kSpeakerBuffer = 512 * 1024;  // full-file PCM buffer (~21 s at 24 kHz)
 constexpr size_t kSpeakerPrebufferBytes = 48000;  // 1 s at 24 kHz, before starting live playback
 constexpr size_t kSpeakerChunk = 512;         // samples per codec write
 
@@ -252,6 +252,7 @@ bool CodecSpeaker::begin(uint32_t sample_rate) {
     return false;
   }
   abort();
+  ready_ = false;
   open_ = true;
   draining_ = false;
   return true;
@@ -268,11 +269,13 @@ void CodecSpeaker::write(const int16_t* samples, size_t count) {
 
 void CodecSpeaker::end() {
   open_ = false;
+  ready_ = true;
   draining_ = true;
 }
 
 void CodecSpeaker::abort() {
   open_ = false;
+  ready_ = false;
   draining_ = false;
   if (pa_) pa_->abort();
   flush_ = true;
@@ -303,6 +306,10 @@ void CodecSpeaker::task(void* arg) {
       } else {
         xStreamBufferReset(self->buffer_);
       }
+    }
+    if (!pa && !self->ready_.load()) {
+      vTaskDelay(pdMS_TO_TICKS(5));
+      continue;
     }
     const size_t buffered = pa ? 0 : xStreamBufferBytesAvailable(self->buffer_);
     if (!pa && hg::speaker_should_wait_for_prebuffer(buffered, prebuffer_bytes, needs_prebuffer,

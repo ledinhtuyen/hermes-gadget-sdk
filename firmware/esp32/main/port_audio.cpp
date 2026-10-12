@@ -17,7 +17,7 @@ namespace {
 
 const char* TAG = "hg.audio";
 constexpr size_t kMicChunk = 320;           // 20 ms at 16 kHz
-constexpr size_t kSpeakerBuffer = 48 * 1024;  // ~1.5 s at 16 kHz; the server paces 0.5 s ahead
+constexpr size_t kSpeakerBuffer = 512 * 1024;  // full-file PCM buffer (~21 s at 24 kHz)
 constexpr size_t kSpeakerPrebufferBytes = 48000;  // 1 s at 24 kHz, before starting live playback
 constexpr size_t kSpeakerChunk = 512;       // samples per I2S write
 
@@ -112,6 +112,7 @@ bool I2sSpeaker::begin(uint32_t sample_rate) {
   if (!tx_) return false;
   abort();
   rate_ = sample_rate;  // applied by the writer task before it next enables the channel
+  ready_ = false;
   open_ = true;
   draining_ = false;
   return true;
@@ -128,11 +129,13 @@ void I2sSpeaker::write(const int16_t* samples, size_t count) {
 
 void I2sSpeaker::end() {
   open_ = false;
+  ready_ = true;
   draining_ = true;
 }
 
 void I2sSpeaker::abort() {
   open_ = false;
+  ready_ = false;
   draining_ = false;
   flush_ = true;
 }
@@ -156,6 +159,10 @@ void I2sSpeaker::task(void* arg) {
         i2s_channel_disable(self->tx_);
         enabled = false;
       }
+    }
+    if (!self->ready_.load()) {
+      vTaskDelay(pdMS_TO_TICKS(5));
+      continue;
     }
     const size_t buffered = xStreamBufferBytesAvailable(self->buffer_);
     if (hg::speaker_should_wait_for_prebuffer(buffered, prebuffer_bytes, needs_prebuffer,

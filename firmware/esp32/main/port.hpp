@@ -224,6 +224,7 @@ class I2sSpeaker final : public hg::AudioOut {
   StreamBufferHandle_t buffer_ = nullptr;
   std::atomic<uint32_t> rate_{16000};
   std::atomic<bool> open_{false};
+  std::atomic<bool> ready_{false};
   std::atomic<bool> draining_{false};
   std::atomic<bool> flush_{false};
   std::atomic<uint8_t> volume_{70};
@@ -368,6 +369,7 @@ class CodecSpeaker final : public hg::AudioOut {
   std::optional<hg::SpeakerPa> pa_;  // set when this speaker, not esp_codec_dev, drives the PA pin
   StreamBufferHandle_t buffer_ = nullptr;
   std::atomic<bool> open_{false};
+  std::atomic<bool> ready_{false};
   std::atomic<bool> draining_{false};
   std::atomic<bool> flush_{false};
 };
