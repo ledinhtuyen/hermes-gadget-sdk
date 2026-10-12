@@ -20,7 +20,7 @@ namespace {
 const char* TAG = "hg.codec";
 constexpr size_t kMicChunk = 320;             // 20 ms at 16 kHz
 constexpr size_t kSpeakerBuffer = 48 * 1024;  // ~1.5 s at 16 kHz; the server paces 0.5 s ahead
-constexpr size_t kSpeakerPrebufferBytes = 6400;  // 200 ms at 16 kHz, before starting live playback
+constexpr size_t kSpeakerPrebufferBytes = 16000;  // 500 ms at 16 kHz, before starting live playback
 constexpr size_t kSpeakerChunk = 512;         // samples per codec write
 
 }  // namespace

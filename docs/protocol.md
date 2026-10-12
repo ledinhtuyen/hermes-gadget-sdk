@@ -145,7 +145,7 @@ Reply text is already shaped for the device: Markdown is stripped and the text i
 2. Binary channel-1 frames follow, about 40 ms each.
 3. `{"type": "audio.end", "stream": 7}` marks normal completion; `{"type": "audio.abort", "stream": 7}` means stop now.
 
-The server resamples to the device's declared speaker rate. It also paces frames to real time, at most 0.5 s ahead, so a jitter buffer of about 1 s is enough. A new `audio.start` replaces the stream that is playing.
+The server resamples to the device's declared speaker rate. It also paces frames to real time, at most 1 s ahead, so a jitter buffer of about 1.5 s is enough. A new `audio.start` replaces the stream that is playing.
 
 ### Display
 
