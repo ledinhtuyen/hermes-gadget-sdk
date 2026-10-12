@@ -155,8 +155,14 @@ void I2sSpeaker::task(void* arg) {
         enabled = false;
       }
     }
-    if (!hg::speaker_should_start(xStreamBufferBytesAvailable(self->buffer_), kSpeakerPrebufferBytes,
-                                  self->open_.load())) {
+    const size_t buffered = xStreamBufferBytesAvailable(self->buffer_);
+    if (self->open_.load() && buffered < kSpeakerPrebufferBytes) {
+      if (enabled) {
+        // Rebuffer before the DMA reaches silence; restarting from the
+        // startup cushion prevents a click and a chopped syllable.
+        i2s_channel_disable(self->tx_);
+        enabled = false;
+      }
       vTaskDelay(pdMS_TO_TICKS(5));
       continue;
     }

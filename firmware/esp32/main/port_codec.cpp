@@ -302,8 +302,12 @@ void CodecSpeaker::task(void* arg) {
         xStreamBufferReset(self->buffer_);
       }
     }
-    if (!pa && !hg::speaker_should_start(xStreamBufferBytesAvailable(self->buffer_), kSpeakerPrebufferBytes,
-                                         self->open_.load())) {
+    const size_t buffered = pa ? 0 : xStreamBufferBytesAvailable(self->buffer_);
+    if (!pa && self->open_.load() && buffered < kSpeakerPrebufferBytes) {
+      if (playing) {
+        esp_codec_dev_set_out_mute(self->dev_, true);
+        playing = false;
+      }
       vTaskDelay(pdMS_TO_TICKS(5));
       continue;
     }
