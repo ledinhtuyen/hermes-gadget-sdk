@@ -4,6 +4,7 @@
 #include "check.hpp"
 #include "hg/canvas.hpp"
 #include "hg/crypto.hpp"
+#include "hg/font.hpp"
 #include "hg/json.hpp"
 #include "hg/protocol.hpp"
 #include "hg/vad.hpp"
@@ -139,6 +140,14 @@ TEST("canvas: word wrap keeps words whole and splits overlong ones") {
   auto paras = hg::wrap_text("a\n\nb", 10);
   CHECK_EQ(paras.size(), size_t(3));
   CHECK_EQ(paras[1], std::string());
+}
+
+TEST("font: UTF-8 Vietnamese codepoints keep one cell and render accents") {
+  char glyph[hg::font::kGlyphWidth * hg::font::kGlyphHeight];
+  CHECK(hg::font::glyph(0x1EBF, glyph));  // ế
+  CHECK(std::string(glyph, sizeof(glyph)).find('#') != std::string::npos);
+  CHECK_EQ(hg::font::utf8_length("Tiếng Việt"), size_t(10));
+  CHECK_EQ(hg::Canvas::text_width("ế", 1), hg::font::kCellWidth - 1);
 }
 
 TEST("canvas: drawing respects the row clip") {
