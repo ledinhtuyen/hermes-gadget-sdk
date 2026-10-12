@@ -26,7 +26,7 @@ log = logging.getLogger("hermes_gadget.hub")
 
 HANDSHAKE_TIMEOUT_S = 10.0
 AUDIO_FRAME_MS = 40          # outbound audio frame duration
-PLAYBACK_LEAD_S = 1.0        # keep a larger lead to absorb short Wi-Fi jitter bursts
+PLAYBACK_LEAD_S = 3.0        # keep three seconds ahead to absorb TTS/Wi-Fi stalls
 IMAGE_CHUNK_BYTES = 4096
 MIN_UTTERANCE_S = 0.25
 MAX_FRAME_BYTES = 1 << 20

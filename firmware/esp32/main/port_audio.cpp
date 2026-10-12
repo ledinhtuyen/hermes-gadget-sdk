@@ -18,7 +18,7 @@ namespace {
 const char* TAG = "hg.audio";
 constexpr size_t kMicChunk = 320;           // 20 ms at 16 kHz
 constexpr size_t kSpeakerBuffer = 2 * 1024 * 1024;  // full-file PCM buffer (~43.7 s at 24 kHz)
-constexpr size_t kSpeakerPrebufferBytes = 48000;  // 1 s at 24 kHz, before starting live playback
+constexpr size_t kSpeakerPrebufferBytes = 144000;  // 3 s at 24 kHz mono PCM16
 constexpr size_t kSpeakerChunk = 512;       // samples per I2S write
 
 i2s_std_config_t std_config(uint32_t rate, i2s_data_bit_width_t bits, int bclk, int ws, int dout, int din) {
@@ -159,10 +159,6 @@ void I2sSpeaker::task(void* arg) {
         i2s_channel_disable(self->tx_);
         enabled = false;
       }
-    }
-    if (!self->ready_.load()) {
-      vTaskDelay(pdMS_TO_TICKS(5));
-      continue;
     }
     const size_t buffered = xStreamBufferBytesAvailable(self->buffer_);
     if (hg::speaker_should_wait_for_prebuffer(buffered, prebuffer_bytes, needs_prebuffer,
