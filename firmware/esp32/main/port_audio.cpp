@@ -148,8 +148,7 @@ void I2sSpeaker::task(void* arg) {
   bool enabled = false;
   bool needs_prebuffer = true;
   uint32_t applied_rate = self->rate_.load();
-  const size_t prebuffer_bytes = std::min(kSpeakerPrebufferBytes,
-                                          xStreamBufferBytesAvailable(self->buffer_));
+  const size_t prebuffer_bytes = kSpeakerPrebufferBytes;
   for (;;) {
     if (self->flush_.exchange(false)) {
       xStreamBufferReset(self->buffer_);

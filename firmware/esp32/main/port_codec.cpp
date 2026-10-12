@@ -293,8 +293,7 @@ void CodecSpeaker::task(void* arg) {
   auto& pa = self->pa_;
   bool playing = false;
   bool needs_prebuffer = true;
-  const size_t prebuffer_bytes = pa ? 0 : std::min(kSpeakerPrebufferBytes,
-                                                   xStreamBufferBytesAvailable(self->buffer_));
+  const size_t prebuffer_bytes = pa ? 0 : kSpeakerPrebufferBytes;
   for (;;) {
     if (self->flush_.exchange(false)) {
       if (pa) {
