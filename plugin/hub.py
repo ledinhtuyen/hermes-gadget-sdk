@@ -111,6 +111,12 @@ class AudioOut:
         self.closed = False
         self.aborted = False
         self.sent_seconds = 0.0
+        self.produced_bytes = 0
+        self.sent_bytes = 0
+        self.max_queue = 0
+        self.first_produced_at: float | None = None
+        self.first_sent_at: float | None = None
+        self.last_sent_at: float | None = None
         self.done = asyncio.Event()
 
     async def start(self, *, turn: str | None = None) -> None:
@@ -121,11 +127,17 @@ class AudioOut:
     def write(self, pcm: bytes) -> None:
         if self.closed:
             return
-        self._buf += self._resampler.process(pcm)
+        converted = self._resampler.process(pcm)
+        if converted:
+            if self.first_produced_at is None:
+                self.first_produced_at = time.monotonic()
+            self.produced_bytes += len(converted)
+        self._buf += converted
         fb = self._frame_bytes
         while len(self._buf) >= fb:
             self._queue.put_nowait(bytes(self._buf[:fb]))
             del self._buf[:fb]
+            self.max_queue = max(self.max_queue, self._queue.qsize())
 
     def finish(self) -> None:
         if self.closed:
@@ -166,9 +178,22 @@ class AudioOut:
                 elif ahead > PLAYBACK_LEAD_S:
                     await asyncio.sleep(ahead - PLAYBACK_LEAD_S)
                 await self._session.send_binary(protocol.binary(protocol.CHANNEL_AUDIO, self.stream, seq, frame))
+                now = time.monotonic()
+                if self.first_sent_at is None:
+                    self.first_sent_at = now
+                self.last_sent_at = now
+                self.sent_bytes += len(frame)
                 seq += 1
                 self.sent_seconds += len(frame) / 2 / self.rate
             await self._session.send_json(protocol.message("audio.end", stream=self.stream))
+            produced_s = self.produced_bytes / 2 / self.rate
+            sent_s = self.sent_bytes / 2 / self.rate
+            produce_wall = (self.last_sent_at - self.first_produced_at) if self.first_produced_at and self.last_sent_at else 0
+            send_wall = (self.last_sent_at - self.first_sent_at) if self.first_sent_at and self.last_sent_at else 0
+            log.warning("audio-rate device=%s stream=%s produced=%.2fs sent=%.2fs produce_wall=%.3fs send_wall=%.3fs produce_x=%.2f send_x=%.2f max_queue=%d",
+                        self._session.device_id, self.stream, produced_s, sent_s, produce_wall, send_wall,
+                        produced_s / produce_wall if produce_wall > 0 else 0, sent_s / send_wall if send_wall > 0 else 0,
+                        self.max_queue)
         except asyncio.CancelledError:
             pass
         except Exception as exc:  # connection dropped mid-stream
