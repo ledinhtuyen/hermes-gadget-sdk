@@ -147,6 +147,7 @@ class GadgetAdapter(BasePlatformAdapter, HubDelegate):
         self._heartbeat_s = int(extra.get("heartbeat_s") or 20)
         self._max_utterance_s = float(extra.get("max_utterance_s") or 60)
         self._speak_replies = _flag(extra.get("speak_replies"), True)
+        self._streaming_tts = _flag(extra.get("streaming_tts"), True)
         self._auto_home = _flag(extra.get("auto_home"), True)
         self._battery_log_on = _flag(extra.get("battery_log"), False)
         self._battery_log: Optional[BatteryLog] = None
@@ -631,7 +632,7 @@ class GadgetAdapter(BasePlatformAdapter, HubDelegate):
 
     def supports_streaming_tts(self, chat_id: str, audio_format: AudioFormat) -> bool:
         session = self._session(chat_id)
-        return bool(session and session.paired and session.has_speaker
+        return bool(self._streaming_tts and session and session.paired and session.has_speaker
                     and audio_format.sample_width == 2 and audio_format.channels in (1, 2))
 
     async def begin_streaming_tts(self, chat_id: str, audio_format: AudioFormat,

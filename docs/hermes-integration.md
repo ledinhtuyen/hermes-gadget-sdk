@@ -31,6 +31,7 @@ platforms:
       port: 8765
       path: /gadget
       speak_replies: true    # spoken replies for devices with a speaker
+      streaming_tts: false   # use whole-file TTS if streamed audio stutters
       auto_home: true        # first approved device becomes the gadget home channel
       unauthorized_dm_behavior: pair
       # heartbeat_s: 20
