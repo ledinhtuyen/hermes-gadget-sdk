@@ -20,6 +20,7 @@ constexpr size_t kMicChunk = 320;           // 20 ms at 16 kHz
 constexpr size_t kSpeakerBuffer = 2 * 1024 * 1024;  // full-file PCM buffer (~43.7 s at 24 kHz)
 constexpr size_t kSpeakerPrebufferBytes = 144000;  // 3 s at 24 kHz mono PCM16
 constexpr size_t kSpeakerChunk = 512;       // samples per I2S write
+constexpr TickType_t kUnderrunGraceTicks = pdMS_TO_TICKS(250);
 
 i2s_std_config_t std_config(uint32_t rate, i2s_data_bit_width_t bits, int bclk, int ws, int dout, int din) {
   i2s_std_config_t cfg = {};
@@ -150,6 +151,8 @@ void I2sSpeaker::task(void* arg) {
   int16_t chunk[kSpeakerChunk];
   bool enabled = false;
   bool needs_prebuffer = true;
+  bool empty_wait = false;
+  TickType_t empty_since = 0;
   uint32_t applied_rate = self->rate_.load();
   const size_t prebuffer_bytes = kSpeakerPrebufferBytes;
   for (;;) {
@@ -170,11 +173,17 @@ void I2sSpeaker::task(void* arg) {
     size_t got = xStreamBufferReceive(self->buffer_, chunk, sizeof(chunk), pdMS_TO_TICKS(20));
     if (got == 0) {
       if (enabled && self->open_.load()) {
+        if (!empty_wait) {
+          empty_wait = true;
+          empty_since = xTaskGetTickCount();
+        }
+        if (xTaskGetTickCount() - empty_since < kUnderrunGraceTicks) continue;
         // An open stream underrun would make the next DMA write audible as a click.
         // Stop the peripheral and wait for the startup cushion to refill.
         i2s_channel_disable(self->tx_);
         enabled = false;
         needs_prebuffer = true;
+        empty_wait = false;
       }
       if (self->draining_ && !self->open_) {
         self->draining_ = false;  // everything queued has been written out
@@ -185,6 +194,7 @@ void I2sSpeaker::task(void* arg) {
       }
       continue;
     }
+    empty_wait = false;
     if (!enabled) {
       uint32_t want = self->rate_.load();
       if (want != applied_rate) {

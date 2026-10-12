@@ -22,6 +22,7 @@ constexpr size_t kMicChunk = 480;             // 20 ms at 24 kHz
 constexpr size_t kSpeakerBuffer = 2 * 1024 * 1024;  // full-file PCM buffer (~43.7 s at 24 kHz)
 constexpr size_t kSpeakerPrebufferBytes = 144000;  // 3 s at 24 kHz mono PCM16
 constexpr size_t kSpeakerChunk = 512;         // samples per codec write
+constexpr TickType_t kUnderrunGraceTicks = pdMS_TO_TICKS(250);
 
 }  // namespace
 
@@ -296,6 +297,8 @@ void CodecSpeaker::task(void* arg) {
   auto& pa = self->pa_;
   bool playing = false;
   bool needs_prebuffer = true;
+  bool empty_wait = false;
+  TickType_t empty_since = 0;
   const size_t prebuffer_bytes = kSpeakerPrebufferBytes;
   for (;;) {
     if (self->flush_.exchange(false)) {
@@ -319,12 +322,18 @@ void CodecSpeaker::task(void* arg) {
                     : xStreamBufferReceive(self->buffer_, chunk, sizeof(chunk), pdMS_TO_TICKS(20));
     if (got == 0) {
       if (playing && self->open_.load()) {
-        // Rebuffer an open stream after a Wi-Fi underrun instead of restarting
-        // the codec on the next tiny packet.
+        if (!empty_wait) {
+          empty_wait = true;
+          empty_since = xTaskGetTickCount();
+        }
+        if (xTaskGetTickCount() - empty_since < kUnderrunGraceTicks) continue;
+        // Rebuffer an open stream after a sustained underrun, not a single
+        // short receive timeout.
         esp_codec_dev_set_out_mute(self->dev_, true);
         if (pa) pa->disable();
         playing = false;
         needs_prebuffer = true;
+        empty_wait = false;
       }
       if (playing && !self->open_) {
         // Everything queued has been written out: mute so the amplifier stays quiet.
@@ -336,6 +345,7 @@ void CodecSpeaker::task(void* arg) {
       if (pa) vTaskDelay(pdMS_TO_TICKS(20));
       continue;
     }
+    empty_wait = false;
     if (!playing) {
       esp_codec_dev_set_out_mute(self->dev_, false);
       playing = true;
