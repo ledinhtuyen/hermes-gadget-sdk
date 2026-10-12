@@ -193,7 +193,8 @@ class App {
   void connect_now();
   void schedule_reconnect();
   void drop_session(std::string_view reason);
-  void send(const json::Value& msg);
+  bool send(const json::Value& msg);
+  void audio_upload_failed();
   void send_hello();
   bool can_talk() const;
   void start_listening(bool hands_free);

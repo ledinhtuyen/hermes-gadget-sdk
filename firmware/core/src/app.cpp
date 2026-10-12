@@ -291,9 +291,21 @@ void App::on_transport_closed(std::string_view reason) {
   update_model();
 }
 
-void App::send(const json::Value& msg) {
+bool App::send(const json::Value& msg) {
   std::string text = msg.dump();
-  if (!hal_.transport->send_text(text)) log(LogLevel::Warn, "send failed");
+  if (!hal_.transport->send_text(text)) {
+    log(LogLevel::Warn, "send failed");
+    return false;
+  }
+  return true;
+}
+
+void App::audio_upload_failed() {
+  mode_ = Mode::Idle;
+  mode_since_ = now();
+  status_.clear();
+  notice_ = "Audio upload failed; try again";
+  notice_until_ = now() + 8000;
 }
 
 void App::send_hello() {
@@ -848,7 +860,11 @@ void App::start_listening(bool hands_free) {
       .set("rate", profile_.mic_rate)
       .set("format", "pcm16")
       .set("mode", hands_free ? "tap" : "hold");
-  send(start);
+  if (!send(start)) {
+    hal_.mic->stop();
+    audio_upload_failed();
+    return;
+  }
   mode_ = Mode::Listening;
   mode_since_ = now();
   reply_.clear();
@@ -861,7 +877,10 @@ void App::finish_listening() {
   if (hal_.mic) hal_.mic->stop();
   json::Value end = proto::message("audio.end");
   end.set("id", request_id_).set("stream", mic_stream_).set("duration_ms", now() - mode_since_);
-  send(end);
+  if (!send(end)) {
+    audio_upload_failed();
+    return;
+  }
   mode_ = Mode::Thinking;
   mode_since_ = now();
   last_turn_rx_ = now();
@@ -919,7 +938,12 @@ void App::on_mic_samples(const int16_t* samples, size_t count) {
     frame_buf_.resize(proto::kBinaryHeader + n * 2);
     proto::write_binary_header(frame_buf_.data(), proto::Channel::Audio, mic_stream_, mic_seq_++);
     std::memcpy(frame_buf_.data() + proto::kBinaryHeader, samples + off, n * 2);
-    hal_.transport->send_binary(frame_buf_.data(), frame_buf_.size());
+    if (!hal_.transport->send_binary(frame_buf_.data(), frame_buf_.size())) {
+      cancel_listening("send failed");
+      audio_upload_failed();
+      update_model();
+      return;
+    }
     off += n;
   }
   if (hands_free_) {

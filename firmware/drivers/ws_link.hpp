@@ -34,7 +34,12 @@ class Generations {
 // use, so leaving a connection never waits for a slow link to drain.
 constexpr size_t kTxMessages = 64;
 constexpr size_t kTxReserved = 4;
+constexpr size_t kTxCloseReserved = 1;
 inline bool may_queue_message(size_t free_slots) { return free_slots > kTxReserved; }
+// Text frames carry protocol control, including audio.end. Let them use the
+// control reserve when PCM has filled the normal queue, but preserve one slot
+// for closing a dead connection without waiting for the link to drain.
+inline bool may_queue_control_message(size_t free_slots) { return free_slots > kTxCloseReserved; }
 
 constexpr uint8_t kText = 0x1;
 constexpr uint8_t kBinary = 0x2;

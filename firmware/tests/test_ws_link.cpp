@@ -96,6 +96,12 @@ TEST("ws: messages leave the reserved slots free") {
   CHECK(!hg::ws::may_queue_message(0));
 }
 
+TEST("ws: control messages can use priority slots but always leave one for close") {
+  CHECK(hg::ws::may_queue_control_message(hg::ws::kTxReserved));
+  CHECK(hg::ws::may_queue_control_message(hg::ws::kTxCloseReserved + 1));
+  CHECK(!hg::ws::may_queue_control_message(hg::ws::kTxCloseReserved));
+}
+
 TEST("ws: a full queue of messages still has room to close") {
   size_t free_slots = hg::ws::kTxMessages + hg::ws::kTxReserved, queued = 0;
   while (hg::ws::may_queue_message(free_slots)) {

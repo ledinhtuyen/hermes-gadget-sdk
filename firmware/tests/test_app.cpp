@@ -30,16 +30,25 @@ struct FakeHal : hg::Display, hg::AudioIn, hg::AudioOut, hg::Transport, hg::Stor
   int connects = 0, closes = 0;
   std::vector<Value> sent;
   std::vector<std::vector<uint8_t>> sent_binary;
+  bool fail_binary = false;
+  std::string fail_text_type;
   void connect(const std::string& u, const std::string&) override {
     url = u;
     ++connects;
   }
   bool send_text(std::string_view text) override {
     Value v;
-    if (hg::json::parse(text, v)) sent.push_back(v);
+    if (hg::json::parse(text, v)) {
+      if (!fail_text_type.empty() && v["type"].as_string() == fail_text_type) {
+        fail_text_type.clear();
+        return false;
+      }
+      sent.push_back(v);
+    }
     return true;
   }
   bool send_binary(const uint8_t* data, size_t len) override {
+    if (fail_binary) return false;
     sent_binary.emplace_back(data, data + len);
     return true;
   }
@@ -310,6 +319,29 @@ TEST("app: push-to-talk streams audio and shows the reply") {
   r.advance(200);
   CHECK(r.app.screen() == hg::Screen::Ready);
   CHECK_EQ(r.app.model().body, std::string("It is sunny."));
+}
+
+TEST("app: a rejected microphone frame aborts instead of leaving the screen listening") {
+  Rig r;
+  r.bring_online(true);
+  r.app.on_button(hg::Button::Talk, true);
+  r.fake.fail_binary = true;
+  std::vector<int16_t> pcm(640, 1000);
+  r.app.on_mic_samples(pcm.data(), pcm.size());
+  CHECK(!r.fake.mic_on);
+  CHECK(r.app.screen() == hg::Screen::Ready);
+  CHECK_EQ(r.app.model().detail, std::string("Audio upload failed; try again"));
+}
+
+TEST("app: a rejected audio.end does not leave the screen thinking") {
+  Rig r;
+  r.bring_online(true);
+  r.app.on_button(hg::Button::Talk, true);
+  r.advance(500);
+  r.fake.fail_text_type = "audio.end";
+  r.app.on_button(hg::Button::Talk, false);
+  CHECK(r.app.screen() == hg::Screen::Ready);
+  CHECK_EQ(r.app.model().detail, std::string("Audio upload failed; try again"));
 }
 
 TEST("app: a short tap is discarded instead of sent") {
