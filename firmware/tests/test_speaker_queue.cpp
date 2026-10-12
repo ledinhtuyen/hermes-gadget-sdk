@@ -12,14 +12,14 @@ TEST("whole_sample_bytes: a write that fits is queued whole") {
   CHECK_EQ(hg::whole_sample_bytes(1280, 49151), 1280u);
 }
 
-TEST("speaker waits for a startup buffer before playing a live stream") {
-  CHECK(!hg::speaker_should_start(4096, 48000, true));
-  CHECK(hg::speaker_should_start(48000, 48000, true));
-  CHECK(hg::speaker_should_start(100, 48000, false));  // drain short final replies
+TEST("speaker waits for a three second startup buffer before live playback") {
+  CHECK(!hg::speaker_should_start(143998, 144000, true));
+  CHECK(hg::speaker_should_start(144000, 144000, true));
+  CHECK(hg::speaker_should_start(100, 144000, false));  // drain short final replies
 }
 
 TEST("speaker does not pause a stream merely below the startup cushion") {
-  CHECK(hg::speaker_should_wait_for_prebuffer(4096, 48000, true, true));
-  CHECK(!hg::speaker_should_wait_for_prebuffer(4096, 48000, false, true));
-  CHECK(!hg::speaker_should_wait_for_prebuffer(4096, 48000, true, false));
+  CHECK(hg::speaker_should_wait_for_prebuffer(4096, 144000, true, true));
+  CHECK(!hg::speaker_should_wait_for_prebuffer(4096, 144000, false, true));
+  CHECK(!hg::speaker_should_wait_for_prebuffer(4096, 144000, true, false));
 }
