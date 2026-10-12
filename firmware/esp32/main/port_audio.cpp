@@ -18,7 +18,7 @@ namespace {
 const char* TAG = "hg.audio";
 constexpr size_t kMicChunk = 320;           // 20 ms at 16 kHz
 constexpr size_t kSpeakerBuffer = 48 * 1024;  // ~1.5 s at 16 kHz; the server paces 0.5 s ahead
-constexpr size_t kSpeakerPrebufferBytes = 16000;  // 500 ms at 16 kHz, before starting live playback
+constexpr size_t kSpeakerPrebufferBytes = 48000;  // 1 s at 24 kHz, before starting live playback
 constexpr size_t kSpeakerChunk = 512;       // samples per I2S write
 
 i2s_std_config_t std_config(uint32_t rate, i2s_data_bit_width_t bits, int bclk, int ws, int dout, int din) {
@@ -146,7 +146,10 @@ void I2sSpeaker::task(void* arg) {
   auto* self = static_cast<I2sSpeaker*>(arg);
   int16_t chunk[kSpeakerChunk];
   bool enabled = false;
+  bool needs_prebuffer = true;
   uint32_t applied_rate = self->rate_.load();
+  const size_t prebuffer_bytes = std::min(kSpeakerPrebufferBytes,
+                                          xStreamBufferBytesAvailable(self->buffer_));
   for (;;) {
     if (self->flush_.exchange(false)) {
       xStreamBufferReset(self->buffer_);
@@ -156,16 +159,12 @@ void I2sSpeaker::task(void* arg) {
       }
     }
     const size_t buffered = xStreamBufferBytesAvailable(self->buffer_);
-    if (self->open_.load() && buffered < kSpeakerPrebufferBytes) {
-      if (enabled) {
-        // Rebuffer before the DMA reaches silence; restarting from the
-        // startup cushion prevents a click and a chopped syllable.
-        i2s_channel_disable(self->tx_);
-        enabled = false;
-      }
+    if (hg::speaker_should_wait_for_prebuffer(buffered, prebuffer_bytes, needs_prebuffer,
+                                              self->open_.load())) {
       vTaskDelay(pdMS_TO_TICKS(5));
       continue;
     }
+    if (needs_prebuffer && buffered >= prebuffer_bytes) needs_prebuffer = false;
     size_t got = xStreamBufferReceive(self->buffer_, chunk, sizeof(chunk), pdMS_TO_TICKS(20));
     if (got == 0) {
       if (enabled && self->open_.load()) {
@@ -173,6 +172,7 @@ void I2sSpeaker::task(void* arg) {
         // Stop the peripheral and wait for the startup cushion to refill.
         i2s_channel_disable(self->tx_);
         enabled = false;
+        needs_prebuffer = true;
       }
       if (self->draining_ && !self->open_) {
         self->draining_ = false;  // everything queued has been written out

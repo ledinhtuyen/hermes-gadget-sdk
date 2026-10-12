@@ -20,7 +20,7 @@ namespace {
 const char* TAG = "hg.codec";
 constexpr size_t kMicChunk = 480;             // 20 ms at 24 kHz
 constexpr size_t kSpeakerBuffer = 48 * 1024;  // ~1.5 s at 16 kHz; the server paces 0.5 s ahead
-constexpr size_t kSpeakerPrebufferBytes = 24000;  // 500 ms at 24 kHz, before starting live playback
+constexpr size_t kSpeakerPrebufferBytes = 48000;  // 1 s at 24 kHz, before starting live playback
 constexpr size_t kSpeakerChunk = 512;         // samples per codec write
 
 }  // namespace
@@ -292,6 +292,9 @@ void CodecSpeaker::task(void* arg) {
   int32_t* stereo = self->stereo_;
   auto& pa = self->pa_;
   bool playing = false;
+  bool needs_prebuffer = true;
+  const size_t prebuffer_bytes = pa ? 0 : std::min(kSpeakerPrebufferBytes,
+                                                   xStreamBufferBytesAvailable(self->buffer_));
   for (;;) {
     if (self->flush_.exchange(false)) {
       if (pa) {
@@ -303,14 +306,12 @@ void CodecSpeaker::task(void* arg) {
       }
     }
     const size_t buffered = pa ? 0 : xStreamBufferBytesAvailable(self->buffer_);
-    if (!pa && self->open_.load() && buffered < kSpeakerPrebufferBytes) {
-      if (playing) {
-        esp_codec_dev_set_out_mute(self->dev_, true);
-        playing = false;
-      }
+    if (!pa && hg::speaker_should_wait_for_prebuffer(buffered, prebuffer_bytes, needs_prebuffer,
+                                                     self->open_.load())) {
       vTaskDelay(pdMS_TO_TICKS(5));
       continue;
     }
+    if (!pa && needs_prebuffer && buffered >= prebuffer_bytes) needs_prebuffer = false;
     uint32_t generation = 0;
     size_t got = pa ? pa->receive(chunk, sizeof(chunk), generation)
                     : xStreamBufferReceive(self->buffer_, chunk, sizeof(chunk), pdMS_TO_TICKS(20));
@@ -321,6 +322,7 @@ void CodecSpeaker::task(void* arg) {
         esp_codec_dev_set_out_mute(self->dev_, true);
         if (pa) pa->disable();
         playing = false;
+        needs_prebuffer = true;
       }
       if (playing && !self->open_) {
         // Everything queued has been written out: mute so the amplifier stays quiet.

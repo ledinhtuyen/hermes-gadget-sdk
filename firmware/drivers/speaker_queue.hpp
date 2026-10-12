@@ -15,4 +15,10 @@ inline bool speaker_should_start(size_t buffered_bytes, size_t prebuffer_bytes, 
   // Live playback waits for a jitter cushion; end-of-stream releases any short tail.
   return !stream_open || buffered_bytes >= prebuffer_bytes;
 }
+
+inline bool speaker_should_wait_for_prebuffer(size_t buffered_bytes, size_t prebuffer_bytes,
+                                              bool needs_prebuffer, bool stream_open) {
+  // Apply the cushion only before the first sample or after a real underrun.
+  return needs_prebuffer && stream_open && buffered_bytes < prebuffer_bytes;
+}
 }  // namespace hg
